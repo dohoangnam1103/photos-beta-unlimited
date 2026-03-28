@@ -11,6 +11,17 @@ const {
   PORT = 3001,
 } = process.env;
 
+// Extract raw API key from base64 token
+let UPLOADTHING_API_KEY = "";
+if (UPLOADTHING_TOKEN) {
+  try {
+    const decoded = JSON.parse(Buffer.from(UPLOADTHING_TOKEN, "base64").toString());
+    UPLOADTHING_API_KEY = decoded.apiKey;
+  } catch {
+    console.error("Failed to decode UPLOADTHING_TOKEN");
+  }
+}
+
 // Health check
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -115,7 +126,7 @@ app.post("/webhook/process-image", async (req, res) => {
     }
 
     // 4. Delete from UploadThing
-    if (uploadthingKey && UPLOADTHING_TOKEN) {
+    if (uploadthingKey && UPLOADTHING_API_KEY) {
       try {
         console.log(`[${photoId}] Deleting from UploadThing...`);
 
@@ -123,7 +134,7 @@ app.post("/webhook/process-image", async (req, res) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-uploadthing-api-key": UPLOADTHING_TOKEN,
+            "x-uploadthing-api-key": UPLOADTHING_API_KEY,
           },
           body: JSON.stringify({ fileKeys: [uploadthingKey] }),
         });
