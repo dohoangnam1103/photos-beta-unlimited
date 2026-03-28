@@ -2,12 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { photos } from "@/db/schema";
-import { eq, and, or, lt, sql } from "drizzle-orm";
+import { eq, and, or, lt, inArray } from "drizzle-orm";
 
 /**
- * Retry failed/stuck photo uploads to Telegram.
- * Finds photos with status "failed" or "processing" (stuck > 10 min)
- * and re-triggers the worker webhook.
+ * Silent retry for failed/stuck photo uploads.
+ * Uses status "retrying" to prevent duplicate worker triggers.
+ *
+ * Status flow:
+ *   upload -> "processing" -> worker success -> "ready"
+ *                           -> worker fail    -> "failed"
+ *   auto-retry -> "retrying" -> worker success -> "ready"
+ *                             -> worker fail    -> "failed"
+ *
+ * Only picks:
+ *   - "failed" photos (always)
+ *   - "processing" photos stuck > 15 min (worker probably crashed)
+ * Never picks:
+ *   - "retrying" (already being retried)
+ *   - "processing" < 15 min (worker might still be working)
+ *   - "ready" (already done)
  */
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -15,9 +28,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
 
-  // Find failed or stuck photos
+  // Find photos that need retry (exclude "retrying" to prevent duplicates)
   const stuckPhotos = await db
     .select()
     .from(photos)
@@ -28,36 +41,34 @@ export async function POST(req: NextRequest) {
           eq(photos.status, "failed"),
           and(
             eq(photos.status, "processing"),
-            lt(photos.uploadedAt, tenMinutesAgo)
+            lt(photos.uploadedAt, fifteenMinutesAgo)
           )
         )
       )
     );
 
   if (stuckPhotos.length === 0) {
-    return NextResponse.json({ retried: 0, message: "Không có ảnh nào cần retry" });
+    return NextResponse.json({ retried: 0 });
   }
 
   const workerUrl = process.env.WORKER_WEBHOOK_URL;
   const callbackSecret = process.env.WORKER_CALLBACK_SECRET;
 
   if (!workerUrl || !callbackSecret) {
-    return NextResponse.json(
-      { error: "Worker not configured" },
-      { status: 500 }
-    );
+    return NextResponse.json({ retried: 0 });
   }
+
+  // Mark ALL as "retrying" first (atomic, prevents race condition)
+  const photoIds = stuckPhotos.map((p) => p.id);
+  await db
+    .update(photos)
+    .set({ status: "retrying" })
+    .where(inArray(photos.id, photoIds));
 
   let retried = 0;
 
   for (const photo of stuckPhotos) {
     if (!photo.uploadthingUrl) continue;
-
-    // Reset status to processing
-    await db
-      .update(photos)
-      .set({ status: "processing" })
-      .where(eq(photos.id, photo.id));
 
     try {
       await fetch(workerUrl, {
@@ -75,7 +86,7 @@ export async function POST(req: NextRequest) {
       });
       retried++;
     } catch {
-      // Mark as failed again if worker is unreachable
+      // Worker unreachable - set back to failed for next retry
       await db
         .update(photos)
         .set({ status: "failed" })
@@ -83,9 +94,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({
-    retried,
-    total: stuckPhotos.length,
-    message: `Đã retry ${retried}/${stuckPhotos.length} ảnh`,
-  });
+  return NextResponse.json({ retried });
 }

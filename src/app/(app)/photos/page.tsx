@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { GridIcon, TimelineIcon, UploadIcon } from "@/components/ui/Icons";
 import { PhotoLightbox } from "@/components/photos/PhotoLightbox";
@@ -34,24 +34,7 @@ export default function PhotosPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("masonry");
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [retrying, setRetrying] = useState(false);
-
-  const failedCount = photos.filter(
-    (p) => p.status === "failed" || (p.status === "processing" && !p.telegramFileId)
-  ).length;
-
-  const retryFailed = async () => {
-    setRetrying(true);
-    try {
-      await fetch("/api/photos/retry-failed", { method: "POST" });
-      // Refresh photos after a short delay
-      setTimeout(() => fetchPhotos(), 2000);
-    } catch {
-      console.error("Retry failed");
-    } finally {
-      setRetrying(false);
-    }
-  };
+  const retriedRef = useRef(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("viewMode") as ViewMode | null;
@@ -72,6 +55,12 @@ export default function PhotosPage() {
       const res = await fetch("/api/photos?limit=200");
       const data = await res.json();
       setPhotos(data.photos || []);
+
+      // Silent retry: trigger once per page visit, non-blocking
+      if (!retriedRef.current) {
+        retriedRef.current = true;
+        fetch("/api/photos/retry-failed", { method: "POST" }).catch(() => {});
+      }
     } catch {
       console.error("Failed to fetch photos");
     } finally {
@@ -148,14 +137,6 @@ export default function PhotosPage() {
         </div>
       </div>
 
-      {failedCount > 0 && (
-        <div className={styles.retryBanner}>
-          <span>⚠️ {failedCount} ảnh chưa được chuyển sang Telegram</span>
-          <button onClick={retryFailed} disabled={retrying}>
-            {retrying ? "Đang xử lý..." : "Thử lại"}
-          </button>
-        </div>
-      )}
 
       {viewMode === "masonry" ? (
         <div className={styles.masonry}>

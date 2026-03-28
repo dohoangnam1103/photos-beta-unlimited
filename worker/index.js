@@ -1,5 +1,4 @@
 import express from "express";
-import { Readable } from "stream";
 
 const app = express();
 app.use(express.json());
@@ -17,6 +16,9 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// In-memory dedup: track photoIds currently being processed
+const processingSet = new Set();
+
 // Process image webhook
 app.post("/webhook/process-image", async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -29,6 +31,14 @@ app.post("/webhook/process-image", async (req, res) => {
   if (!photoId || !uploadthingUrl) {
     return res.status(400).json({ error: "Missing required fields" });
   }
+
+  // Dedup: skip if already processing this photo
+  if (processingSet.has(photoId)) {
+    console.log(`[${photoId}] Already processing, skipping duplicate`);
+    return res.json({ status: "already_processing" });
+  }
+
+  processingSet.add(photoId);
 
   // Respond immediately, process in background
   res.json({ status: "processing" });
@@ -141,6 +151,8 @@ app.post("/webhook/process-image", async (req, res) => {
         body: JSON.stringify({ photoId, error: err.message }),
       });
     } catch {}
+  } finally {
+    processingSet.delete(photoId);
   }
 });
 

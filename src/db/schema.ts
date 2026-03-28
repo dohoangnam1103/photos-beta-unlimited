@@ -91,7 +91,7 @@ export const photos = pgTable(
     takenAt: timestamp("taken_at", { mode: "date" }),
     uploadedAt: timestamp("uploaded_at", { mode: "date" }).defaultNow().notNull(),
     status: text("status", {
-      enum: ["processing", "ready", "failed"],
+      enum: ["processing", "ready", "failed", "retrying"],
     })
       .default("processing")
       .notNull(),
