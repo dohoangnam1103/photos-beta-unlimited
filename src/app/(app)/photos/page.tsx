@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { GridIcon, TimelineIcon, UploadIcon } from "@/components/ui/Icons";
 import { PhotoLightbox } from "@/components/photos/PhotoLightbox";
-import { formatDate, groupPhotosByDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import styles from "@/styles/gallery.module.scss";
 
 interface Photo {
@@ -108,14 +108,6 @@ export default function PhotosPage() {
     );
   }
 
-  const photoGroups = groupPhotosByDate(
-    photos.map((p) => ({
-      ...p,
-      takenAt: p.takenAt ? new Date(p.takenAt) : null,
-      uploadedAt: new Date(p.uploadedAt),
-    }))
-  );
-
   return (
     <div className={styles.galleryPage}>
       <div className={styles.galleryHeader}>
@@ -164,37 +156,47 @@ export default function PhotosPage() {
         </div>
       ) : (
         <div className={styles.timeline}>
-          {Array.from(photoGroups.entries()).map(([dateKey, groupPhotos]) => {
-            const globalStartIndex = photos.findIndex(
-              (p) => p.id === groupPhotos[0].id
-            );
+          {(() => {
+            // Group photo indices by date
+            const groups = new Map<string, number[]>();
+            for (let i = 0; i < photos.length; i++) {
+              const p = photos[i];
+              const dateStr = p.takenAt || p.uploadedAt;
+              const key = new Date(dateStr).toISOString().split("T")[0];
+              const arr = groups.get(key) || [];
+              arr.push(i);
+              groups.set(key, arr);
+            }
 
-            return (
+            return Array.from(groups.entries()).map(([dateKey, indices]) => (
               <div key={dateKey} className={styles.timelineGroup}>
                 <div className={`${styles.timelineDate} glass`}>
                   {formatDate(dateKey)}
                 </div>
                 <div className={styles.timelineGrid}>
-                  {groupPhotos.map((photo, i) => (
-                    <div
-                      key={photo.id}
-                      className={styles.timelineItem}
-                      onClick={() => openLightbox(globalStartIndex + i)}
-                    >
-                      <img
-                        src={getImageSrc(photo)}
-                        alt={photo.originalFilename}
-                        loading="lazy"
-                      />
-                      {photo.status === "processing" && (
-                        <div className={styles.processingBadge} />
-                      )}
-                    </div>
-                  ))}
+                  {indices.map((idx) => {
+                    const photo = photos[idx];
+                    return (
+                      <div
+                        key={photo.id}
+                        className={styles.timelineItem}
+                        onClick={() => openLightbox(idx)}
+                      >
+                        <img
+                          src={getImageSrc(photo)}
+                          alt={photo.originalFilename}
+                          loading="lazy"
+                        />
+                        {photo.status === "processing" && (
+                          <div className={styles.processingBadge} />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            );
-          })}
+            ));
+          })()}
         </div>
       )}
 

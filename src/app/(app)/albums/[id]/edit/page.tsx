@@ -43,8 +43,8 @@ export default function AlbumEditPage({ params }: { params: Promise<{ id: string
 
       setAllPhotos(photosData.photos || []);
 
-      const existingIds = new Set(
-        (albumData.photos || []).map((p: Photo) => p.id)
+      const existingIds = new Set<string>(
+        (albumData.photos || []).map((p: { id: string }) => p.id)
       );
       setAlbumPhotoIds(existingIds);
     } catch {
