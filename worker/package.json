@@ -1,6 +1,7 @@
 {
   "name": "photos-worker",
   "version": "1.0.0",
+  "type": "module",
   "description": "Worker service for processing photo uploads to Telegram",
   "main": "index.js",
   "scripts": {
