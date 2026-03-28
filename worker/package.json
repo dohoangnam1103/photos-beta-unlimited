@@ -1,0 +1,14 @@
+{
+  "name": "photos-worker",
+  "version": "1.0.0",
+  "description": "Worker service for processing photo uploads to Telegram",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "node-fetch": "^3.3.2"
+  }
+}

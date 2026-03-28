@@ -1,0 +1,223 @@
+.uploadPage {
+  padding: var(--space-5) var(--space-4);
+  max-width: 900px;
+  margin: 0 auto;
+
+  @media (min-width: 768px) {
+    padding: var(--space-7) var(--space-6);
+  }
+}
+
+.pageTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: var(--space-5);
+
+  @media (min-width: 768px) {
+    font-size: 2rem;
+  }
+}
+
+.dropZone {
+  border: 2px dashed var(--color-border-light);
+  border-radius: var(--radius-xl);
+  padding: var(--space-7) var(--space-5);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--transition-base), background var(--transition-base);
+
+  &:hover,
+  &.dragging {
+    border-color: var(--color-accent);
+    background: var(--color-accent-light);
+  }
+
+  .dropIcon {
+    font-size: 3rem;
+    margin-bottom: var(--space-3);
+  }
+
+  h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: var(--space-2);
+  }
+
+  p {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+  }
+
+  input {
+    display: none;
+  }
+}
+
+.previewGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+
+  @media (min-width: 480px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.previewItem {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  animation: fadeInUp var(--transition-slow) ease-out;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &.duplicate {
+    opacity: 0.4;
+
+    &::after {
+      content: 'Trùng';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--color-error);
+      color: white;
+      padding: var(--space-1) var(--space-3);
+      border-radius: var(--radius-full);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+  }
+}
+
+.removeBtn {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.7rem;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+
+  .previewItem:hover & {
+    opacity: 1;
+  }
+}
+
+.progressBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--color-bg-tertiary);
+
+  .progressFill {
+    height: 100%;
+    background: var(--color-accent);
+    transition: width var(--transition-base);
+  }
+}
+
+.uploadActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+
+  @media (min-width: 480px) {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
+.fileCount {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+
+  span {
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+}
+
+.uploadBtn {
+  padding: var(--space-3) var(--space-6);
+  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-hover));
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.statusMsg {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  text-align: center;
+  animation: fadeIn var(--transition-fast);
+
+  &.success {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    color: var(--color-success);
+  }
+
+  &.error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: var(--color-error);
+  }
+
+  &.info {
+    background: var(--color-accent-light);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    color: var(--color-accent);
+  }
+}
+
+.duplicateWarning {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: var(--radius-md);
+  color: var(--color-warning);
+  font-size: 0.85rem;
+}
