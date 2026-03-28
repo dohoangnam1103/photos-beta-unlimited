@@ -34,6 +34,24 @@ export default function PhotosPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("masonry");
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [retrying, setRetrying] = useState(false);
+
+  const failedCount = photos.filter(
+    (p) => p.status === "failed" || (p.status === "processing" && !p.telegramFileId)
+  ).length;
+
+  const retryFailed = async () => {
+    setRetrying(true);
+    try {
+      await fetch("/api/photos/retry-failed", { method: "POST" });
+      // Refresh photos after a short delay
+      setTimeout(() => fetchPhotos(), 2000);
+    } catch {
+      console.error("Retry failed");
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   useEffect(() => {
     const stored = localStorage.getItem("viewMode") as ViewMode | null;
@@ -129,6 +147,15 @@ export default function PhotosPage() {
           </button>
         </div>
       </div>
+
+      {failedCount > 0 && (
+        <div className={styles.retryBanner}>
+          <span>⚠️ {failedCount} ảnh chưa được chuyển sang Telegram</span>
+          <button onClick={retryFailed} disabled={retrying}>
+            {retrying ? "Đang xử lý..." : "Thử lại"}
+          </button>
+        </div>
+      )}
 
       {viewMode === "masonry" ? (
         <div className={styles.masonry}>
