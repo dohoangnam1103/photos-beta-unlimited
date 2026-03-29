@@ -41,6 +41,47 @@ export function SharedAlbumClient({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+
+  const downloadAll = async () => {
+    setDownloading(true);
+    setDownloadProgress(0);
+    try {
+      const { downloadZip } = await import("client-zip");
+      
+      async function* getFiles() {
+        for (let i = 0; i < photos.length; i++) {
+          const p = photos[i];
+          const url = getImageSrc(p);
+          const res = await fetch(url);
+          if (res.ok) {
+            setDownloadProgress(i + 1);
+            yield {
+              name: p.originalFilename || `photo_${i}.jpg`,
+              lastModified: new Date(p.takenAt || p.uploadedAt),
+              input: res
+            };
+          }
+        }
+      }
+
+      // Nén zip qua luồng stream (tiết kiệm RAM cho iOS/Android)
+      const blob = await downloadZip(getFiles()).blob();
+
+      // Kích hoạt download
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${album.name || "album"}.zip`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (e) {
+      alert("Tải xuống thất bại. Vui lòng thử lại.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const openLightbox = useCallback((index: number) => {
     setLightboxIndex(index);
     setLightboxOpen(true);
@@ -56,7 +97,7 @@ export function SharedAlbumClient({
   return (
     <div className={styles.galleryPage} style={{ minHeight: "100dvh" }}>
       <div className={styles.galleryHeader}>
-        <div>
+        <div style={{ flex: 1 }}>
           <h1>{album.name}</h1>
           {album.description && (
             <p style={{ color: "var(--color-text-secondary)", marginTop: "var(--space-1)" }}>
@@ -66,6 +107,27 @@ export function SharedAlbumClient({
           <p style={{ color: "var(--color-text-tertiary)", fontSize: "0.8rem", marginTop: "var(--space-1)" }}>
             {photos.length} ảnh • Album được chia sẻ
           </p>
+        </div>
+        <div>
+          <button 
+            onClick={downloadAll} 
+            disabled={downloading}
+            style={{
+              padding: "8px 16px",
+              background: "var(--color-primary)",
+              color: "white",
+              border: "none",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              opacity: downloading ? 0.7 : 1
+            }}
+          >
+            {downloading ? `Đang tải ${downloadProgress}/${photos.length}...` : "⬇️ Tải tất cả"}
+          </button>
         </div>
       </div>
 

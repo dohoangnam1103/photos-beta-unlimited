@@ -77,11 +77,26 @@ export default function PhotosPage() {
   }, []);
 
   const lightboxSlides = photos.map((p) => ({
+    id: p.id,
     src: getImageSrc(p),
     alt: p.originalFilename,
     width: p.width || 1920,
     height: p.height || 1080,
   }));
+
+  const deletePhoto = async (photoId: string) => {
+    try {
+      const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+        setLightboxOpen(false);
+      } else {
+        alert("Có lỗi xảy ra khi xoá ảnh.");
+      }
+    } catch {
+      alert("Lỗi kết nối khi xoá ảnh.");
+    }
+  };
 
   if (loading) {
     return (
@@ -216,6 +231,8 @@ export default function PhotosPage() {
         close={() => setLightboxOpen(false)}
         slides={lightboxSlides}
         index={lightboxIndex}
+        showDelete={true}
+        onDelete={deletePhoto}
       />
     </div>
   );
