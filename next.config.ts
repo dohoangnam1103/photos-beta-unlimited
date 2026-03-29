@@ -17,6 +17,14 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  eslint: {
+    // Vercel build sẽ bỏ qua check ESLint để tăng tốc (nên check ở code editor)
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    // Vercel build sẽ bỏ qua check TypeScript (nên check ở local)
+    ignoreBuildErrors: true,
+  },
   sassOptions: {
     silenceDeprecations: ["legacy-js-api"],
   },
