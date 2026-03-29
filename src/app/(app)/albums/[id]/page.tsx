@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import Link from "next/link";
-import { ShareIcon, PlusIcon } from "@/components/ui/Icons";
+import { ShareIcon, PlusIcon, TrashIcon, InfoIcon, XIcon } from "@/components/ui/Icons";
 import { PhotoLightbox } from "@/components/photos/PhotoLightbox";
 import { formatDate } from "@/lib/utils";
 import styles from "@/styles/albums.module.scss";
@@ -47,6 +47,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
   const [showShare, setShowShare] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
   const [copied, setCopied] = useState(false);
+  const [infoPhoto, setInfoPhoto] = useState<Photo | null>(null);
 
   useEffect(() => {
     fetchAlbum();
@@ -88,22 +89,18 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
   };
 
   const lightboxSlides = photos.map((p) => ({
-    id: p.id,
     src: getImageSrc(p),
     alt: p.originalFilename,
     width: p.width || 1920,
     height: p.height || 1080,
-    fileSize: p.fileSize,
-    takenAt: p.takenAt ? new Date(p.takenAt) : null,
-    uploadedAt: new Date(p.uploadedAt),
   }));
 
   const deletePhoto = async (photoId: string) => {
+    if (!confirm("Bạn có chắc chắn muốn xoá ảnh này?")) return;
     try {
       const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' });
       if (res.ok) {
         setPhotos((prev) => prev.filter((p) => p.id !== photoId));
-        setLightboxOpen(false);
       } else {
         alert("Có lỗi xảy ra khi xoá ảnh.");
       }
@@ -205,13 +202,28 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
             <div
               key={photo.id}
               className={galleryStyles.masonryItem}
-              onClick={() => openLightbox(index)}
             >
-              <img src={getImageSrc(photo)} alt={photo.originalFilename} loading="lazy" />
+              <img src={getImageSrc(photo)} alt={photo.originalFilename} loading="lazy" onClick={() => openLightbox(index)} />
               <div className={galleryStyles.masonryOverlay}>
                 <span className={galleryStyles.photoDate}>
                   {formatDate(photo.takenAt || photo.uploadedAt)}
                 </span>
+              </div>
+              <div className={galleryStyles.photoActions}>
+                <button
+                  className={galleryStyles.photoActionBtn}
+                  onClick={(e) => { e.stopPropagation(); setInfoPhoto(photo); }}
+                  title="Thông tin"
+                >
+                  <InfoIcon size={16} />
+                </button>
+                <button
+                  className={galleryStyles.photoActionBtn}
+                  onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }}
+                  title="Xoá"
+                >
+                  <TrashIcon size={16} />
+                </button>
               </div>
             </div>
           ))}
@@ -223,9 +235,31 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
         close={() => setLightboxOpen(false)}
         slides={lightboxSlides}
         index={lightboxIndex}
-        showDelete={true}
-        onDelete={deletePhoto}
       />
+
+      {/* Info Modal */}
+      {infoPhoto && (
+        <div
+          className={galleryStyles.infoOverlay}
+          onClick={() => setInfoPhoto(null)}
+        >
+          <div className={galleryStyles.infoModal} onClick={(e) => e.stopPropagation()}>
+            <div className={galleryStyles.infoHeader}>
+              <h3>Thông tin ảnh</h3>
+              <button onClick={() => setInfoPhoto(null)} className={galleryStyles.infoClose}>
+                <XIcon size={18} />
+              </button>
+            </div>
+            <div className={galleryStyles.infoBody}>
+              <div className={galleryStyles.infoRow}><span>Tên file:</span><span>{infoPhoto.originalFilename}</span></div>
+              <div className={galleryStyles.infoRow}><span>Độ phân giải:</span><span>{infoPhoto.width || "?"} × {infoPhoto.height || "?"}</span></div>
+              <div className={galleryStyles.infoRow}><span>Dung lượng:</span><span>{infoPhoto.fileSize ? `${(infoPhoto.fileSize / 1024 / 1024).toFixed(2)} MB` : "Không rõ"}</span></div>
+              <div className={galleryStyles.infoRow}><span>Ngày chụp:</span><span>{infoPhoto.takenAt ? formatDate(infoPhoto.takenAt) : "Không rõ"}</span></div>
+              <div className={galleryStyles.infoRow}><span>Ngày tải lên:</span><span>{formatDate(infoPhoto.uploadedAt)}</span></div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showShare && (
         <div className={styles.modalOverlay} onClick={() => setShowShare(false)}>

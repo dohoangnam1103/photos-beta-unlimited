@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { photos, albumPhotos } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { photos } from "@/db/schema";
+import { eq, and, isNull } from "drizzle-orm";
 
 export async function DELETE(
   req: NextRequest,
@@ -16,11 +16,11 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // Check if the photo exists and belongs to the user
+    // Check if the photo exists, belongs to the user, and is not already deleted
     const [photo] = await db
       .select({ id: photos.id })
       .from(photos)
-      .where(and(eq(photos.id, id), eq(photos.userId, session.user.id)))
+      .where(and(eq(photos.id, id), eq(photos.userId, session.user.id), isNull(photos.deletedAt)))
       .limit(1);
 
     if (!photo) {
@@ -30,8 +30,8 @@ export async function DELETE(
       );
     }
 
-    // Delete photo from database. Cascade rules should handle albumPhotos.
-    await db.delete(photos).where(eq(photos.id, id));
+    // Soft delete: set deletedAt timestamp
+    await db.update(photos).set({ deletedAt: new Date() }).where(eq(photos.id, id));
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -95,6 +95,7 @@ export const photos = pgTable(
     })
       .default("processing")
       .notNull(),
+    deletedAt: timestamp("deleted_at", { mode: "date" }),
   },
   (photo) => [
     index("photos_user_uploaded_idx").on(photo.userId, photo.uploadedAt),

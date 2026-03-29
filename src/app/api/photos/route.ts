@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { photos } from "@/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, isNull, and } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const userPhotos = await db
     .select()
     .from(photos)
-    .where(eq(photos.userId, session.user.id))
+    .where(and(eq(photos.userId, session.user.id), isNull(photos.deletedAt)))
     .orderBy(desc(sql`COALESCE(${photos.takenAt}, ${photos.uploadedAt})`))
     .limit(limit)
     .offset(offset);
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   const [countResult] = await db
     .select({ count: sql<number>`count(*)` })
     .from(photos)
-    .where(eq(photos.userId, session.user.id));
+    .where(and(eq(photos.userId, session.user.id), isNull(photos.deletedAt)));
 
   return NextResponse.json({
     photos: userPhotos,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { albums, albumPhotos, photos } from "@/db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 
 export async function GET(
   req: NextRequest,
@@ -35,11 +35,12 @@ export async function GET(
       status: photos.status,
       width: photos.width,
       height: photos.height,
+      fileSize: photos.fileSize,
       addedAt: albumPhotos.addedAt,
     })
     .from(albumPhotos)
     .innerJoin(photos, eq(albumPhotos.photoId, photos.id))
-    .where(eq(albumPhotos.albumId, id))
+    .where(and(eq(albumPhotos.albumId, id), isNull(photos.deletedAt)))
     .orderBy(desc(sql`COALESCE(${photos.takenAt}, ${photos.uploadedAt})`));
 
   return NextResponse.json({ album, photos: albumPhotosList });
