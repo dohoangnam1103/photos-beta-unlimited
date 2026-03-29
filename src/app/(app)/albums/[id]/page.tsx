@@ -107,6 +107,40 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
       alert("Lỗi kết nối khi xoá ảnh.");
     }
   };
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+
+  const downloadAll = async () => {
+    setDownloading(true);
+    setDownloadProgress(0);
+    try {
+      for (let i = 0; i < photos.length; i++) {
+        const p = photos[i];
+        const url = getImageSrc(p);
+        
+        // Tải ảnh về qua URL để giữ định dạng nguyên bản
+        const res = await fetch(url);
+        if (res.ok) {
+          const blob = await res.blob();
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = p.originalFilename || `photo_${i + 1}.jpg`;
+          document.body.appendChild(link); // Required for Firefox/some browsers
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(link.href);
+        }
+        setDownloadProgress(i + 1);
+        
+        // Thêm một độ trễ nhỏ để tránh trình duyệt coi là Spam
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    } catch (e) {
+      alert("Tải xuống thất bại. Vui lòng thử lại.");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -136,6 +170,9 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
           {album.description && <p>{album.description}</p>}
         </div>
         <div className={styles.albumActions}>
+          <button className={styles.actionBtn} onClick={downloadAll} disabled={downloading}>
+            {downloading ? `Đang tải ${downloadProgress}/${photos.length}` : "⬇️ Tải tất cả"}
+          </button>
           <button className={styles.actionBtn} onClick={createShareLink}>
             <ShareIcon size={16} />
             Chia sẻ

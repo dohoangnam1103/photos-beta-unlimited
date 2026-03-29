@@ -48,33 +48,27 @@ export function SharedAlbumClient({
     setDownloading(true);
     setDownloadProgress(0);
     try {
-      const { downloadZip } = await import("client-zip");
-      
-      async function* getFiles() {
-        for (let i = 0; i < photos.length; i++) {
-          const p = photos[i];
-          const url = getImageSrc(p);
-          const res = await fetch(url);
-          if (res.ok) {
-            setDownloadProgress(i + 1);
-            yield {
-              name: p.originalFilename || `photo_${i}.jpg`,
-              lastModified: new Date(p.takenAt || p.uploadedAt),
-              input: res
-            };
-          }
+      for (let i = 0; i < photos.length; i++) {
+        const p = photos[i];
+        const url = getImageSrc(p);
+        
+        // Tải ảnh về qua URL (thay vì BlobZip) để giữ định dạng nguyên bản
+        const res = await fetch(url);
+        if (res.ok) {
+          const blob = await res.blob();
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = p.originalFilename || `photo_${i + 1}.jpg`;
+          document.body.appendChild(link); // Required for Firefox/some browsers
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(link.href);
         }
+        setDownloadProgress(i + 1);
+        
+        // Thêm một độ trễ nhỏ để tránh trình duyệt (Safari/Chrome) coi đây là Spam Pop-up
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
-
-      // Nén zip qua luồng stream (tiết kiệm RAM cho iOS/Android)
-      const blob = await downloadZip(getFiles()).blob();
-
-      // Kích hoạt download
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = `${album.name || "album"}.zip`;
-      link.click();
-      URL.revokeObjectURL(link.href);
     } catch (e) {
       alert("Tải xuống thất bại. Vui lòng thử lại.");
     } finally {
