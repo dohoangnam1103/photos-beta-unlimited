@@ -24,6 +24,8 @@ export default function UploadPage() {
   const [files, setFiles] = useState<FileWithMeta[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [processProgress, setProcessProgress] = useState({ current: 0, total: 0 });
   const autoUploadRef = useRef(false);
   const [status, setStatus] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -46,12 +48,12 @@ export default function UploadPage() {
         canvas.width = w;
         canvas.height = h;
         canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
-        URL.revokeObjectURL(url); // Giải phóng file gốc khỏi RAM ngay
+        URL.revokeObjectURL(url);
         resolve(canvas.toDataURL("image/jpeg", 0.6));
       };
       img.onerror = () => {
         URL.revokeObjectURL(url);
-        resolve(""); // fallback
+        resolve("");
       };
       img.src = url;
     });
@@ -60,7 +62,6 @@ export default function UploadPage() {
   const processFiles = useCallback(async (rawFiles: File[]) => {
     setStatus(null);
 
-    // Filter valid types
     const validFiles = rawFiles.filter((f) => {
       const type = f.type.toLowerCase();
       return (
@@ -81,11 +82,18 @@ export default function UploadPage() {
       return;
     }
 
-    // Process each file: hash + EXIF
-    const processed: FileWithMeta[] = [];
+    // Hiện loading ngay lập tức
+    setProcessing(true);
+    setProcessProgress({ current: 0, total: validFiles.length });
 
-    for (const file of validFiles) {
+    const allProcessed: FileWithMeta[] = [];
+
+    for (let i = 0; i < validFiles.length; i++) {
+      const file = validFiles[i];
       let processedFile = file;
+
+      // Cập nhật tiến trình
+      setProcessProgress({ current: i + 1, total: validFiles.length });
 
       // Convert HEIC to JPEG on client
       if (
@@ -124,7 +132,7 @@ export default function UploadPage() {
 
       const thumbnail = await createThumbnail(processedFile);
 
-      processed.push({
+      const newFile: FileWithMeta = {
         file: processedFile,
         preview: thumbnail,
         hash,
@@ -132,17 +140,25 @@ export default function UploadPage() {
         takenAt,
         uploading: false,
         progress: 0,
-      });
+      };
+
+      allProcessed.push(newFile);
+
+      // Thêm từng ảnh vào UI ngay khi xử lý xong (mỗi 5 ảnh hoặc ảnh cuối)
+      if ((i + 1) % 5 === 0 || i === validFiles.length - 1) {
+        const batch = allProcessed.slice(-((i + 1) % 5 === 0 ? 5 : (i + 1) % 5 || 5));
+        setFiles((prev) => [...prev, ...batch]);
+      }
     }
 
-    // Check duplicates
-    if (processed.length > 0) {
+    // Check duplicates sau khi đã render hết
+    if (allProcessed.length > 0) {
       try {
         const res = await fetch("/api/photos/check-duplicates", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            items: processed.map((f) => ({ hash: f.hash, filename: f.file.name })),
+            items: allProcessed.map((f) => ({ hash: f.hash, filename: f.file.name })),
           }),
         });
         const data = await res.json();
@@ -151,25 +167,26 @@ export default function UploadPage() {
           const dupHashes = new Set(data.duplicates.map((d: { hash: string }) => d.hash));
           const dupFilenames = new Set(data.duplicates.map((d: { filename: string }) => d.filename));
 
-          for (const p of processed) {
-            if (dupHashes.has(p.hash)) {
-              p.isDuplicate = true;
-              p.duplicateReason = "File trùng nội dung";
-            } else if (dupFilenames.has(p.file.name)) {
-              p.isDuplicate = true;
-              p.duplicateReason = "Tên file trùng";
-            }
-          }
+          setFiles((prev) =>
+            prev.map((p) => {
+              if (dupHashes.has(p.hash)) {
+                return { ...p, isDuplicate: true, duplicateReason: "File trùng nội dung" };
+              } else if (dupFilenames.has(p.file.name)) {
+                return { ...p, isDuplicate: true, duplicateReason: "Tên file trùng" };
+              }
+              return p;
+            })
+          );
         }
       } catch {
         // Continue without duplicate check
       }
     }
 
-    setFiles((prev) => [...prev, ...processed]);
-    
-    // Đánh dấu cần auto-upload 
-    if (processed.some(p => !p.isDuplicate)) {
+    setProcessing(false);
+
+    // Đánh dấu cần auto-upload
+    if (allProcessed.some(p => !p.isDuplicate)) {
       autoUploadRef.current = true;
     }
   }, [files.length]);
@@ -238,8 +255,6 @@ export default function UploadPage() {
 
       setStatus({ type: "success", msg: `Đã tải lên ${filesToUpload.length} ảnh thành công!` });
 
-      // Clean up
-      files.forEach((f) => URL.revokeObjectURL(f.preview));
       setFiles([]);
 
       setTimeout(() => router.push("/photos"), 1500);
@@ -252,11 +267,11 @@ export default function UploadPage() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (autoUploadRef.current && !uploading && files.length > 0) {
+    if (autoUploadRef.current && !uploading && !processing && files.length > 0) {
       autoUploadRef.current = false;
       handleUpload();
     }
-  }, [files, uploading]); // intentionally omitting handleUpload to avoid infinite loops since it's not a useCallback yet
+  }, [files, uploading, processing]);
 
   const duplicateCount = files.filter((f) => f.isDuplicate).length;
   const uploadableCount = files.filter((f) => !f.isDuplicate).length;
@@ -270,7 +285,7 @@ export default function UploadPage() {
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => !processing && inputRef.current?.click()}
       >
         <div className={styles.dropIcon}>📷</div>
         <h3>Kéo thả ảnh vào đây</h3>
@@ -283,6 +298,22 @@ export default function UploadPage() {
           onChange={handleFileSelect}
         />
       </div>
+
+      {/* Thanh tiến trình xử lý ảnh */}
+      {processing && (
+        <div className={styles.processingBar}>
+          <div className={styles.processingBarInner}>
+            <SpinnerIcon size={16} />
+            <span>Đang chuẩn bị ảnh {processProgress.current}/{processProgress.total}...</span>
+          </div>
+          <div className={styles.progressTrack}>
+            <div
+              className={styles.progressFill}
+              style={{ width: `${(processProgress.current / processProgress.total) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {duplicateCount > 0 && (
         <div className={styles.duplicateWarning}>
@@ -308,19 +339,27 @@ export default function UploadPage() {
             ))}
           </div>
 
-          <div className={styles.uploadActions}>
-            <span className={styles.fileCount}>
-              <span>{uploadableCount}</span> ảnh đang được xử lý...
-              {duplicateCount > 0 && ` (Đã bỏ qua ${duplicateCount} ảnh trùng)`}
-            </span>
-            <button
-              className={styles.uploadBtn}
-              onClick={handleUpload}
-              disabled={true}
-            >
-              <SpinnerIcon size={16} /> Đang tải lên...
-            </button>
-          </div>
+          {!processing && (
+            <div className={styles.uploadActions}>
+              <span className={styles.fileCount}>
+                <span>{uploadableCount}</span> ảnh sẽ được tải lên
+                {duplicateCount > 0 && ` (${duplicateCount} trùng)`}
+              </span>
+              <button
+                className={styles.uploadBtn}
+                onClick={handleUpload}
+                disabled={uploading || uploadableCount === 0}
+              >
+                {uploading ? (
+                  <>
+                    <SpinnerIcon size={16} /> Đang tải lên...
+                  </>
+                ) : (
+                  `Tải lên ${uploadableCount} ảnh`
+                )}
+              </button>
+            </div>
+          )}
         </>
       )}
 
