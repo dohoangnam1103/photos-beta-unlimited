@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUploadThing } from "@/lib/uploadthing-client";
 import { hashFile } from "@/lib/utils";
@@ -24,6 +24,7 @@ export default function UploadPage() {
   const [files, setFiles] = useState<FileWithMeta[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const autoUploadRef = useRef(false);
   const [status, setStatus] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -138,6 +139,11 @@ export default function UploadPage() {
     }
 
     setFiles((prev) => [...prev, ...processed]);
+    
+    // Đánh dấu cần auto-upload 
+    if (processed.some(p => !p.isDuplicate)) {
+      autoUploadRef.current = true;
+    }
   }, [files.length]);
 
   const handleDrop = useCallback(
@@ -217,6 +223,14 @@ export default function UploadPage() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (autoUploadRef.current && !uploading && files.length > 0) {
+      autoUploadRef.current = false;
+      handleUpload();
+    }
+  }, [files, uploading]); // intentionally omitting handleUpload to avoid infinite loops since it's not a useCallback yet
+
   const duplicateCount = files.filter((f) => f.isDuplicate).length;
   const uploadableCount = files.filter((f) => !f.isDuplicate).length;
 
@@ -269,21 +283,15 @@ export default function UploadPage() {
 
           <div className={styles.uploadActions}>
             <span className={styles.fileCount}>
-              <span>{uploadableCount}</span> ảnh sẽ được tải lên
-              {duplicateCount > 0 && ` (${duplicateCount} trùng)`}
+              <span>{uploadableCount}</span> ảnh đang được xử lý...
+              {duplicateCount > 0 && ` (Đã bỏ qua ${duplicateCount} ảnh trùng)`}
             </span>
             <button
               className={styles.uploadBtn}
               onClick={handleUpload}
-              disabled={uploading || uploadableCount === 0}
+              disabled={true}
             >
-              {uploading ? (
-                <>
-                  <SpinnerIcon size={16} /> Đang tải lên...
-                </>
-              ) : (
-                `Tải lên ${uploadableCount} ảnh`
-              )}
+              <SpinnerIcon size={16} /> Đang tải lên...
             </button>
           </div>
         </>

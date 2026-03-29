@@ -24,6 +24,7 @@ interface Photo {
   status: string;
   width?: number | null;
   height?: number | null;
+  fileSize?: number;
 }
 
 function getImageSrc(photo: Photo): string {
@@ -92,6 +93,9 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
     alt: p.originalFilename,
     width: p.width || 1920,
     height: p.height || 1080,
+    fileSize: p.fileSize,
+    takenAt: p.takenAt ? new Date(p.takenAt) : null,
+    uploadedAt: new Date(p.uploadedAt),
   }));
 
   const deletePhoto = async (photoId: string) => {

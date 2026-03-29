@@ -14,6 +14,7 @@ interface Photo {
   uploadedAt: Date;
   width: number | null;
   height: number | null;
+  fileSize?: number;
 }
 
 interface Album {
@@ -82,10 +83,14 @@ export function SharedAlbumClient({
   }, []);
 
   const slides = photos.map((p) => ({
+    id: p.id,
     src: getImageSrc(p),
     alt: p.originalFilename,
     width: p.width || 1920,
     height: p.height || 1080,
+    fileSize: p.fileSize,
+    takenAt: p.takenAt,
+    uploadedAt: p.uploadedAt,
   }));
 
   return (
