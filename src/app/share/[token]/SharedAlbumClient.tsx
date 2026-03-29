@@ -22,7 +22,12 @@ interface Album {
 }
 
 function getImageSrc(photo: Photo): string {
-  if (photo.telegramFileId) return `/api/telegram/image/${photo.id}`;
+  if (photo.telegramFileId) {
+    if (process.env.NEXT_PUBLIC_CDN_URL) {
+      return `${process.env.NEXT_PUBLIC_CDN_URL}/image/${photo.telegramFileId}`;
+    }
+    return `/api/telegram/image/${photo.id}`;
+  }
   return photo.uploadthingUrl || "";
 }
 
