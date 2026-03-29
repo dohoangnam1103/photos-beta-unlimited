@@ -31,6 +31,32 @@ export default function UploadPage() {
 
   const { startUpload } = useUploadThing("photoUploader");
 
+  // Tạo thumbnail nhỏ (max 200px) bằng canvas để tiết kiệm RAM cho iOS
+  const createThumbnail = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const MAX = 200;
+        let w = img.width;
+        let h = img.height;
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url); // Giải phóng file gốc khỏi RAM ngay
+        resolve(canvas.toDataURL("image/jpeg", 0.6));
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(""); // fallback
+      };
+      img.src = url;
+    });
+  };
+
   const processFiles = useCallback(async (rawFiles: File[]) => {
     setStatus(null);
 
@@ -96,9 +122,11 @@ export default function UploadPage() {
         // No EXIF data
       }
 
+      const thumbnail = await createThumbnail(processedFile);
+
       processed.push({
         file: processedFile,
-        preview: URL.createObjectURL(processedFile),
+        preview: thumbnail,
         hash,
         isDuplicate: false,
         takenAt,
@@ -167,7 +195,6 @@ export default function UploadPage() {
 
   const removeFile = (index: number) => {
     setFiles((prev) => {
-      URL.revokeObjectURL(prev[index].preview);
       return prev.filter((_, i) => i !== index);
     });
   };
