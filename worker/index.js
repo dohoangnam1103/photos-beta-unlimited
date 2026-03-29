@@ -70,60 +70,28 @@ app.post("/webhook/process-image", async (req, res) => {
     const formData = new FormData();
     formData.append("chat_id", TELEGRAM_CHANNEL_ID);
     formData.append(
-      "photo",
+      "document",
       new Blob([imageBuffer], { type: contentType }),
       `photo_${photoId}.jpg`
     );
 
     const tgRes = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
       { method: "POST", body: formData }
     );
 
     const tgData = await tgRes.json();
 
     if (!tgData.ok) {
-      // If file is too large for sendPhoto (>10MB), try sendDocument
-      if (imageBuffer.length > 10 * 1024 * 1024) {
-        console.log(`[${photoId}] Photo too large, trying sendDocument...`);
-
-        const docFormData = new FormData();
-        docFormData.append("chat_id", TELEGRAM_CHANNEL_ID);
-        docFormData.append(
-          "document",
-          new Blob([imageBuffer], { type: contentType }),
-          `photo_${photoId}.jpg`
-        );
-
-        const docRes = await fetch(
-          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
-          { method: "POST", body: docFormData }
-        );
-
-        const docData = await docRes.json();
-
-        if (!docData.ok) {
-          throw new Error(`Telegram error: ${JSON.stringify(docData)}`);
-        }
-
-        const fileId = docData.result.document.file_id;
-
-        // 3. Callback to Next.js
-        await sendCallback(callbackUrl, photoId, fileId);
-      } else {
-        throw new Error(`Telegram error: ${JSON.stringify(tgData)}`);
-      }
-    } else {
-      // Get the largest photo size
-      const photoSizes = tgData.result.photo;
-      const largestPhoto = photoSizes[photoSizes.length - 1];
-      const fileId = largestPhoto.file_id;
-
-      console.log(`[${photoId}] Telegram upload success. file_id: ${fileId}`);
-
-      // 3. Callback to Next.js
-      await sendCallback(callbackUrl, photoId, fileId);
+      throw new Error(`Telegram error: ${JSON.stringify(tgData)}`);
     }
+
+    const fileId = tgData.result.document.file_id;
+
+    console.log(`[${photoId}] Telegram upload success. file_id: ${fileId}`);
+
+    // 3. Callback to Next.js
+    await sendCallback(callbackUrl, photoId, fileId);
 
     // 4. Delete from UploadThing
     if (uploadthingKey && UPLOADTHING_API_KEY) {
