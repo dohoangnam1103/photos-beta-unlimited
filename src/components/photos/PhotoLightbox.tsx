@@ -93,65 +93,9 @@ export function PhotoLightbox({ open, close, slides, index, onDelete, showDelete
       onTouchEnd={handleTouchEnd}
       style={{ position: "fixed", inset: 0, zIndex: 9999, transition: "transform 200ms ease, opacity 200ms ease" }}
     >
-      {showDelete && onDelete && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleDelete();
-          }}
-          style={{
-            position: "absolute",
-            top: "var(--space-3)",
-            right: "var(--space-12)", // to not overlap with close button
-            zIndex: 10000,
-            background: "rgba(0,0,0,0.5)",
-            color: "white",
-            border: "none",
-            borderRadius: "50%",
-            width: 40,
-            height: 40,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            transition: "background 0.2s",
-          }}
-          title="Xoá ảnh này"
-        >
-          <TrashIcon size={20} />
-        </button>
-      )}
-      
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          setShowInfo(true);
-        }}
-        style={{
-          position: "absolute",
-          top: "var(--space-3)",
-          right: (showDelete && onDelete) ? "calc(var(--space-12) + 50px)" : "var(--space-12)",
-          zIndex: 10000,
-          background: "rgba(0,0,0,0.5)",
-          color: "white",
-          border: "none",
-          borderRadius: "50%",
-          width: 40,
-          height: 40,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          transition: "background 0.2s",
-        }}
-        title="Thông tin ảnh"
-      >
-        <InfoIcon size={20} />
-      </button>
-
       {showInfo && slides[activeIndex] && (
         <div style={{
-          position: "absolute",
+          position: "fixed",
           bottom: 0,
           left: 0,
           right: 0,
@@ -164,22 +108,22 @@ export function PhotoLightbox({ open, close, slides, index, onDelete, showDelete
           gap: "var(--space-2)",
           animation: "slideUp 0.2s ease-out"
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <h3 style={{ margin: 0, fontSize: "1.2rem", wordBreak: "break-word" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: "var(--space-2)", borderBottom: "1px solid rgba(255,255,255,0.1)", marginBottom: "var(--space-2)" }}>
+            <h3 style={{ margin: 0, fontSize: "1.2rem", wordBreak: "break-word", paddingRight: "var(--space-4)" }}>
               {slides[activeIndex].alt || "Không có tên"}
             </h3>
             <button 
               onClick={(e) => { e.stopPropagation(); setShowInfo(false); }}
-              style={{ background: "transparent", border: "none", color: "white", cursor: "pointer", padding: 4 }}
+              style={{ background: "rgba(255,255,255,0.2)", borderRadius: "50%", border: "none", color: "white", cursor: "pointer", padding: 6, display: "flex", alignItems: "center" }}
             >
               <XIcon size={20} />
             </button>
           </div>
-          <div style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.8)", display: "grid", gridTemplateColumns: "100px 1fr", gap: "4px" }}>
-            <span>Độ phân giải:</span> <span>{slides[activeIndex].width || "?"} x {slides[activeIndex].height || "?"}</span>
-            <span>Dung lượng:</span> <span>{formatBytes(slides[activeIndex].fileSize)}</span>
-            <span>Ngày chụp:</span> <span>{formatDate(slides[activeIndex].takenAt)}</span>
-            <span>Ngày tải lên:</span> <span>{formatDate(slides[activeIndex].uploadedAt)}</span>
+          <div style={{ fontSize: "0.95rem", color: "rgba(255,255,255,0.9)", display: "grid", gridTemplateColumns: "110px 1fr", gap: "8px" }}>
+            <span style={{color: "rgba(255,255,255,0.6)"}}>Độ phân giải:</span> <span>{slides[activeIndex].width || "?"} x {slides[activeIndex].height || "?"}</span>
+            <span style={{color: "rgba(255,255,255,0.6)"}}>Dung lượng:</span> <span>{formatBytes(slides[activeIndex].fileSize)}</span>
+            <span style={{color: "rgba(255,255,255,0.6)"}}>Ngày chụp:</span> <span>{formatDate(slides[activeIndex].takenAt)}</span>
+            <span style={{color: "rgba(255,255,255,0.6)"}}>Ngày tải lên:</span> <span>{formatDate(slides[activeIndex].uploadedAt)}</span>
           </div>
         </div>
       )}
@@ -195,6 +139,39 @@ export function PhotoLightbox({ open, close, slides, index, onDelete, showDelete
         animation={{ swipe: 250 }}
         carousel={{ finite: false }}
         controller={{ closeOnBackdropClick: true }}
+        toolbar={{
+          buttons: [
+            <button
+              key="info"
+              type="button"
+              className="yarl__button"
+              onClick={(e) => {
+                e.preventDefault();
+                setShowInfo(true);
+              }}
+              title="Thông tin ảnh"
+              style={{ filter: "drop-shadow(0px 2px 2px rgba(0,0,0,0.5))" }}
+            >
+              <InfoIcon size={24} />
+            </button>,
+            ...(showDelete && onDelete ? [
+              <button
+                key="delete"
+                type="button"
+                className="yarl__button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDelete();
+                }}
+                title="Xoá ảnh này"
+                style={{ filter: "drop-shadow(0px 2px 2px rgba(0,0,0,0.5))" }}
+              >
+                <TrashIcon size={24} />
+              </button>
+            ] : []),
+            "close"
+          ]
+        }}
         styles={{
           container: { backgroundColor: "rgba(0, 0, 0, 0.95)" },
         }}
