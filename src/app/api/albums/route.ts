@@ -3,12 +3,22 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { albums, albumPhotos, photos } from "@/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
+import { rateLimit } from "@/lib/rate-limit";
+import { z } from "zod";
+
+const createAlbumSchema = z.object({
+  name: z.string().trim().min(1, "Tên album không được để trống").max(200),
+  description: z.string().trim().max(1000).optional(),
+});
 
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const limited = await rateLimit(session.user.id, "relaxed");
+  if (limited) return limited;
 
   const userAlbums = await db
     .select({
@@ -76,19 +86,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await req.json();
-  const { name, description } = body;
+  const limited = await rateLimit(session.user.id, "strict");
+  if (limited) return limited;
 
-  if (!name?.trim()) {
-    return NextResponse.json({ error: "Tên album không được để trống" }, { status: 400 });
+  const body = await req.json();
+  const parsed = createAlbumSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.errors[0]?.message || "Invalid data" },
+      { status: 400 }
+    );
   }
+
+  const { name, description } = parsed.data;
 
   const [album] = await db
     .insert(albums)
     .values({
       userId: session.user.id,
-      name: name.trim(),
-      description: description?.trim() || null,
+      name,
+      description: description || null,
     })
     .returning();
 

@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { photos } from "@/db/schema";
 import { eq, and, or, lt, inArray } from "drizzle-orm";
+import { rateLimit } from "@/lib/rate-limit";
 
 /**
  * Silent retry for failed/stuck photo uploads.
@@ -10,9 +11,9 @@ import { eq, and, or, lt, inArray } from "drizzle-orm";
  *
  * Status flow:
  *   upload -> "processing" -> worker success -> "ready"
- *                           -> worker fail    -> "failed"
+ *                          -> worker fail    -> "failed"
  *   auto-retry -> "retrying" -> worker success -> "ready"
- *                             -> worker fail    -> "failed"
+ *                            -> worker fail    -> "failed"
  *
  * Only picks:
  *   - "failed" photos (always)
@@ -27,6 +28,10 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Strict rate limit: retry is expensive (triggers external workers)
+  const limited = await rateLimit(session.user.id, "strict");
+  if (limited) return limited;
 
   const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
 

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { sharedLinks, albums } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function POST(
   req: NextRequest,
@@ -14,6 +15,9 @@ export async function POST(
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const limited = await rateLimit(session.user.id, "strict");
+  if (limited) return limited;
 
   // Verify ownership
   const [album] = await db
@@ -52,6 +56,9 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const limited = await rateLimit(session.user.id, "relaxed");
+  if (limited) return limited;
+
   const links = await db
     .select()
     .from(sharedLinks)
@@ -75,8 +82,26 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const limited = await rateLimit(session.user.id, "standard");
+  if (limited) return limited;
+
   const body = await req.json();
   const { linkId } = body;
+
+  if (!linkId || typeof linkId !== "string") {
+    return NextResponse.json({ error: "linkId required" }, { status: 400 });
+  }
+
+  // Verify album ownership before deactivating link
+  const [album] = await db
+    .select({ id: albums.id })
+    .from(albums)
+    .where(and(eq(albums.id, id), eq(albums.userId, session.user.id)))
+    .limit(1);
+
+  if (!album) {
+    return NextResponse.json({ error: "Album not found" }, { status: 404 });
+  }
 
   await db
     .update(sharedLinks)

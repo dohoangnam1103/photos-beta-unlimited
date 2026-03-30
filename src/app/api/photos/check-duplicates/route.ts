@@ -3,6 +3,22 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { photos } from "@/db/schema";
 import { eq, and, or, inArray } from "drizzle-orm";
+import { rateLimit } from "@/lib/rate-limit";
+import { z } from "zod";
+
+const MAX_CHECK_ITEMS = 500;
+
+const checkDuplicatesSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        hash: z.string().max(128),
+        filename: z.string().max(500),
+      })
+    )
+    .min(1)
+    .max(MAX_CHECK_ITEMS),
+});
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -10,13 +26,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await req.json();
-  const items: { hash: string; filename: string }[] = body.items;
+  const limited = await rateLimit(session.user.id, "standard");
+  if (limited) return limited;
 
-  if (!items?.length) {
-    return NextResponse.json({ duplicates: [] });
+  const body = await req.json();
+  const parsed = checkDuplicatesSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid request data", details: parsed.error.flatten() },
+      { status: 400 }
+    );
   }
 
+  const items = parsed.data.items;
   const hashes = items.map((i) => i.hash);
   const filenames = items.map((i) => i.filename);
 

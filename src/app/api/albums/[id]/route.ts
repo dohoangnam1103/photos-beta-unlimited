@@ -3,6 +3,14 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { albums, albumPhotos, photos } from "@/db/schema";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { rateLimit } from "@/lib/rate-limit";
+import { z } from "zod";
+
+const updateAlbumSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  description: z.string().trim().max(1000).optional().nullable(),
+  coverPhotoId: z.string().max(100).optional().nullable(),
+});
 
 export async function GET(
   req: NextRequest,
@@ -13,6 +21,9 @@ export async function GET(
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const limited = await rateLimit(session.user.id, "relaxed");
+  if (limited) return limited;
 
   const [album] = await db
     .select()
@@ -56,14 +67,26 @@ export async function PATCH(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const limited = await rateLimit(session.user.id, "standard");
+  if (limited) return limited;
+
   const body = await req.json();
-  const { name, description, coverPhotoId } = body;
+  const parsed = updateAlbumSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid data", details: parsed.error.flatten() },
+      { status: 400 }
+    );
+  }
+
+  const { name, description, coverPhotoId } = parsed.data;
 
   const [album] = await db
     .update(albums)
     .set({
-      ...(name && { name: name.trim() }),
-      ...(description !== undefined && { description: description?.trim() || null }),
+      ...(name && { name }),
+      ...(description !== undefined && { description: description || null }),
       ...(coverPhotoId !== undefined && { coverPhotoId }),
       updatedAt: new Date(),
     })
@@ -86,6 +109,9 @@ export async function DELETE(
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const limited = await rateLimit(session.user.id, "standard");
+  if (limited) return limited;
 
   await db
     .delete(albums)

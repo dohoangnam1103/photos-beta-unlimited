@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { photos } from "@/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function DELETE(
   req: NextRequest,
@@ -13,6 +14,9 @@ export async function DELETE(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const limited = await rateLimit(session.user.id, "standard");
+    if (limited) return limited;
 
     const { id } = await params;
 

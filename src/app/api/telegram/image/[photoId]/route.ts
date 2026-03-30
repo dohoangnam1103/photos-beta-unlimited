@@ -1,22 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { photos } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { photos, albumPhotos, sharedLinks } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
+/**
+ * Serve photo images with proper authorization.
+ *
+ * Access is granted if:
+ * 1. User is authenticated AND owns the photo, OR
+ * 2. Photo belongs to an album with an active shared link (public shared access)
+ */
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ photoId: string }> }
 ) {
   const { photoId } = await params;
 
-  // Check auth or shared access
   const session = await auth();
-  const isSharedAccess = req.headers.get("x-shared-access") === "true";
 
-  if (!session?.user?.id && !isSharedAccess) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // Rate limit by userId (authenticated) or IP (anonymous/shared)
+  const identifier = session?.user?.id || `ip:${getClientIp(req)}`;
+  const limited = await rateLimit(identifier, "relaxed");
+  if (limited) return limited;
 
   const [photo] = await db
     .select()
@@ -26,6 +33,17 @@ export async function GET(
 
   if (!photo) {
     return NextResponse.json({ error: "Photo not found" }, { status: 404 });
+  }
+
+  // Authorization check
+  const isOwner = session?.user?.id && photo.userId === session.user.id;
+
+  if (!isOwner) {
+    // Check if photo belongs to any publicly shared album
+    const isShared = await isPhotoInSharedAlbum(photoId);
+    if (!isShared) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   // If has telegram file id, fetch from Telegram
@@ -72,4 +90,25 @@ export async function GET(
   }
 
   return NextResponse.json({ error: "No image source available" }, { status: 404 });
+}
+
+/**
+ * Check if a photo belongs to any album with an active shared link.
+ * This replaces the insecure x-shared-access header approach.
+ */
+async function isPhotoInSharedAlbum(photoId: string): Promise<boolean> {
+  const result = await db
+    .select({ id: sharedLinks.id })
+    .from(albumPhotos)
+    .innerJoin(
+      sharedLinks,
+      and(
+        eq(sharedLinks.albumId, albumPhotos.albumId),
+        eq(sharedLinks.isActive, true)
+      )
+    )
+    .where(eq(albumPhotos.photoId, photoId))
+    .limit(1);
+
+  return result.length > 0;
 }

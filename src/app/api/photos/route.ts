@@ -3,6 +3,29 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { photos } from "@/db/schema";
 import { eq, desc, sql, isNull, and } from "drizzle-orm";
+import { rateLimit } from "@/lib/rate-limit";
+import { z } from "zod";
+
+const MAX_PAGE_LIMIT = 100;
+
+const createPhotoSchema = z.object({
+  photos: z
+    .array(
+      z.object({
+        originalFilename: z.string().max(500),
+        fileHash: z.string().max(128),
+        uploadthingUrl: z.string().url().max(1000),
+        uploadthingKey: z.string().max(500),
+        width: z.number().int().positive().optional(),
+        height: z.number().int().positive().optional(),
+        mimeType: z.string().max(50),
+        fileSize: z.number().int().positive(),
+        takenAt: z.string().optional(),
+      })
+    )
+    .min(1)
+    .max(500),
+});
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -10,9 +33,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const limited = await rateLimit(session.user.id, "relaxed");
+  if (limited) return limited;
+
   const { searchParams } = new URL(req.url);
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "50");
+  const page = Math.max(parseInt(searchParams.get("page") || "1") || 1, 1);
+  const limit = Math.min(
+    Math.max(parseInt(searchParams.get("limit") || "50") || 50, 1),
+    MAX_PAGE_LIMIT
+  );
   const offset = (page - 1) * limit;
 
   const userPhotos = await db
@@ -42,22 +71,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await req.json();
-  const items: {
-    originalFilename: string;
-    fileHash: string;
-    uploadthingUrl: string;
-    uploadthingKey: string;
-    width?: number;
-    height?: number;
-    mimeType: string;
-    fileSize: number;
-    takenAt?: string;
-  }[] = body.photos;
+  const limited = await rateLimit(session.user.id, "strict");
+  if (limited) return limited;
 
-  if (!items?.length) {
-    return NextResponse.json({ error: "No photos provided" }, { status: 400 });
+  const body = await req.json();
+  const parsed = createPhotoSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid request data", details: parsed.error.flatten() },
+      { status: 400 }
+    );
   }
+
+  const items = parsed.data.photos;
 
   const newPhotos = await db
     .insert(photos)
